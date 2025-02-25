@@ -8,7 +8,8 @@ shinyUI(fluidPage(
             uiOutput("file_selector"),
             uiOutput("analyze_button"),
             # plotOutput("histo", height = "100px"),
-            uiOutput("slider_thresholding")
+            uiOutput("slider_thresholding"),
+            uiOutput("summary")
         ),
         mainPanel(
             plotOutput("scatterPlot", height = "600px")

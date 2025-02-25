@@ -73,47 +73,109 @@ shinyServer(
             # Create slider UI for threshold values (appears after clicking "Process")
             output$slider_thresholding <- renderUI({
                 req(data)
-                sliderInput(
-                    "thresholding",
-                    "Set lower and upper threshold",
-                    min = floor(min(data$RFU, na.rm = TRUE)),
-                    max = ceiling(max(data$RFU, na.rm = TRUE)),
-                    value = c(
-                        floor(min(data$RFU, na.rm = TRUE)),
-                        ceiling(max(data$RFU, na.rm = TRUE))
+                fluidRow(
+                    column(
+                        12,
+                        numericInput(
+                            "lower_threshold",
+                            "Set lower threshold:",
+                            value = floor(min(data$RFU, na.rm = TRUE)),
+                            min = 0,
+                            max = ceiling(max(data$RFU, na.rm = TRUE))
+                        )
                     ),
-                    step = 1,
-                    ticks = FALSE
+                    column(
+                        12,
+                        numericInput(
+                            "upper_threshold",
+                            "Set upper threshold:",
+                            value = ceiling(max(data$RFU, na.rm = TRUE)),
+                            min = 0,
+                            max = ceiling(max(data$RFU, na.rm = TRUE))
+                        )
+                    )
                 )
+                # sliderInput(
+                #     "thresholding",
+                #     "Set lower and upper threshold:",
+                #     min = floor(min(data$RFU, na.rm = TRUE)),
+                #     max = ceiling(max(data$RFU, na.rm = TRUE)),
+                #     value = c(
+                #         floor(min(data$RFU, na.rm = TRUE)),
+                #         ceiling(max(data$RFU, na.rm = TRUE))
+                #     ),
+                #     step = 1,
+                #     ticks = FALSE
+                # )
             })
 
             # Generate scatter plot
             output$scatterPlot <- renderPlot({
-                req(data, input$thresholding)
+                req(data, input$lower_threshold, input$upper_threshold)
 
                 data %>%
                     filter(`Is invalid` == 0) %>%
+                    mutate(
+                        color_category = case_when(
+                            RFU < input$lower_threshold ~ "Negative",
+                            RFU > input$upper_threshold ~ "Positive",
+                            (RFU >= input$lower_threshold & RFU <= input$upper_threshold) ~ "Rain"
+                        )
+                    ) %>%
                     # Subsample data to prevent performance issues
                     sample_n(100000) %>%
                     ggplot(
-                        aes(x = Partition, y = RFU)
+                        aes(x = Partition, y = RFU, color = color_category)
                     ) +
-                    geom_point(alpha = 0.5, color = "black") +
+                    geom_point(alpha = 0.5) +
                     geom_hline(
-                        yintercept = input$thresholding[1],
+                        yintercept = input$lower_threshold,
                         linetype = "dashed",
                         linewidth = 1.5,
                         color = "red"
                     ) +
                     geom_hline(
-                        yintercept = input$thresholding[2],
+                        yintercept = input$upper_threshold,
                         linetype = "dashed",
                         linewidth = 1.5,
                         color = "blue",
                     ) +
-                    labs(x = "Partition index", y = "RFU") +
+                    labs(x = "Partition index", y = "RFU", color = "") +
+                    scale_y_continuous(
+                        breaks =
+                            round(
+                                seq(
+                                    min(data$RFU, na.rm = TRUE),
+                                    max(data$RFU, na.rm = TRUE),
+                                    by = 5
+                                ),
+                                0
+                            )
+                    ) +
                     theme_minimal() +
                     theme(text = element_text(size = 20))
+            })
+
+            output$summary <- renderTable({
+                req(data, input$lower_threshold, input$upper_threshold)
+
+                count_data <- data %>%
+                    filter(`Is invalid` == 0) %>%
+                    mutate(
+                        color_category = case_when(
+                            RFU < input$lower_threshold ~ "Negative",
+                            RFU > input$upper_threshold ~ "Positive",
+                            (RFU >= input$lower_threshold & RFU <= input$upper_threshold) ~ "Rain"
+                        )
+                    )
+
+                total_count <- nrow(count_data)
+
+                count_data %>%
+                    group_by(color_category) %>%
+                    summarise(Count = n()) %>%
+                    mutate(Fraction = Count / total_count) %>%
+                    rename("Category" = "color_category")
             })
         })
     }
