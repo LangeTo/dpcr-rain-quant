@@ -95,18 +95,6 @@ shinyServer(
                         )
                     )
                 )
-                # sliderInput(
-                #     "thresholding",
-                #     "Set lower and upper threshold:",
-                #     min = floor(min(data$RFU, na.rm = TRUE)),
-                #     max = ceiling(max(data$RFU, na.rm = TRUE)),
-                #     value = c(
-                #         floor(min(data$RFU, na.rm = TRUE)),
-                #         ceiling(max(data$RFU, na.rm = TRUE))
-                #     ),
-                #     step = 1,
-                #     ticks = FALSE
-                # )
             })
 
             # Generate scatter plot
@@ -132,15 +120,16 @@ shinyServer(
                         yintercept = input$lower_threshold,
                         linetype = "dashed",
                         linewidth = 1.5,
-                        color = "red"
+                        color = "black"
                     ) +
                     geom_hline(
                         yintercept = input$upper_threshold,
                         linetype = "dashed",
                         linewidth = 1.5,
-                        color = "blue",
+                        color = "black",
                     ) +
                     labs(x = "Partition index", y = "RFU", color = "") +
+                    scale_color_viridis_d() +
                     scale_y_continuous(
                         breaks =
                             round(
