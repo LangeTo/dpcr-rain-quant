@@ -15,26 +15,41 @@ shinyServer(
         observeEvent(input$zipfile, {
             req(input$zipfile)
 
-            # Create a temp directory
-            temp_dir <- tempdir()
+            # Create a unique subdirectory inside the tempdir
+            temp_dir <- file.path(
+                tempdir(),
+                paste0("upload_", as.integer(Sys.time()))
+            )
+            dir.create(temp_dir)
 
             # Unzip files
             unzip(input$zipfile$datapath, exdir = temp_dir)
 
             # Get list of CSV files (full path & name)
-            csv_files <- list.files(temp_dir, pattern = "\\.csv$", full.names = TRUE)
+            csv_files <- list.files(
+                temp_dir,
+                pattern = "\\.csv$",
+                full.names = TRUE
+            )
             csv_names <- basename(csv_files) # Extract only file names
 
             # Store file data (mapping names to paths)
             file_data(
-                data.frame(Name = csv_names, Path = csv_files, stringsAsFactors = FALSE) %>%
+                data.frame(
+                    Name = csv_names,
+                    Path = csv_files,
+                    stringsAsFactors = FALSE
+                ) %>%
                     mutate(
                         Channel = case_when(
                             grepl("_G_", Name) ~ "Green",
                             grepl("_Y_", Name) ~ "Yellow",
                             grepl("_O_", Name) ~ "Orange",
                             grepl("_R_", Name) ~ "Red",
-                            grepl("_REF_", Name) ~ "Reference"
+                            grepl("_C_", Name) ~ "Crimson",
+                            grepl("_Fr_", Name) ~ "Far Red",
+                            grepl("_REF_", Name) ~ "Reference",
+                            TRUE ~ "Unknown channel"
                         )
                     )
             )
@@ -43,7 +58,11 @@ shinyServer(
         # Create a dropdown for file selection (appears after upload)
         output$file_selector <- renderUI({
             req(file_data())
-            selectInput("selected_file", "Select fluorescence detection channel to analyze:", choices = file_data()$Channel)
+            selectInput(
+                "selected_file",
+                "Select fluorescence detection channel to analyze:",
+                choices = file_data()$Channel
+            )
         })
 
         output$analyze_button <- renderUI({
@@ -56,7 +75,9 @@ shinyServer(
             req(file_data(), input$selected_file)
 
             # Find the path of the selected file
-            selected_path <- file_data()$Path[file_data()$Channel == input$selected_file]
+            selected_path <- file_data()$Path[
+                file_data()$Channel == input$selected_file
+            ]
 
             # Read the selected file
             data <- read_csv(selected_path, skip = 1, show_col_types = FALSE)
@@ -107,7 +128,9 @@ shinyServer(
                         color_category = case_when(
                             RFU < input$lower_threshold ~ "Negative",
                             RFU > input$upper_threshold ~ "Positive",
-                            (RFU >= input$lower_threshold & RFU <= input$upper_threshold) ~ "Rain"
+                            (RFU >= input$lower_threshold &
+                                RFU <= input$upper_threshold) ~
+                                "Rain"
                         )
                     ) %>%
                     # Subsample data to prevent performance issues
@@ -131,15 +154,14 @@ shinyServer(
                     labs(x = "Partition index", y = "RFU", color = "") +
                     scale_color_viridis_d() +
                     scale_y_continuous(
-                        breaks =
-                            round(
-                                seq(
-                                    min(data$RFU, na.rm = TRUE),
-                                    max(data$RFU, na.rm = TRUE),
-                                    by = 5
-                                ),
-                                0
-                            )
+                        breaks = round(
+                            seq(
+                                min(data$RFU, na.rm = TRUE),
+                                max(data$RFU, na.rm = TRUE),
+                                by = 5
+                            ),
+                            0
+                        )
                     ) +
                     theme_minimal() +
                     theme(text = element_text(size = 20))
@@ -154,7 +176,9 @@ shinyServer(
                         color_category = case_when(
                             RFU < input$lower_threshold ~ "Negative",
                             RFU > input$upper_threshold ~ "Positive",
-                            (RFU >= input$lower_threshold & RFU <= input$upper_threshold) ~ "Rain"
+                            (RFU >= input$lower_threshold &
+                                RFU <= input$upper_threshold) ~
+                                "Rain"
                         )
                     )
 
@@ -165,6 +189,42 @@ shinyServer(
                     summarise(Count = n()) %>%
                     mutate(Fraction = Count / total_count) %>%
                     rename("Category" = "color_category")
+            })
+
+            output$fraction_pos <- renderText({
+                req(data, input$lower_threshold, input$upper_threshold)
+
+                count_data <- data %>%
+                    filter(`Is invalid` == 0) %>%
+                    mutate(
+                        color_category = case_when(
+                            RFU < input$lower_threshold ~ "Negative",
+                            RFU > input$upper_threshold ~ "Positive",
+                            (RFU >= input$lower_threshold &
+                                RFU <= input$upper_threshold) ~
+                                "Rain"
+                        )
+                    ) %>%
+                    group_by(color_category) %>%
+                    summarise(Count = n())
+
+                fraction <- round(
+                    count_data[
+                        count_data$color_category == "Rain",
+                    ]$Count[1] /
+                        sum(
+                            count_data[
+                                count_data$color_category != "Negative",
+                            ]$Count
+                        ) *
+                        100,
+                    1
+                )
+
+                paste(
+                    fraction,
+                    "% of all positive partitions can be considered 'rain'."
+                )
             })
         })
     }
